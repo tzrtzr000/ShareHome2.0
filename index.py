@@ -2,9 +2,9 @@ import json
 import datetime
 import pymysql
 
-# Create a sql database connection 
+
+# Create a sql database connection
 def database_connect():
-    
     ####################################
     db_name = 'shareHome'
     host_name = 'alexadb.yishen.org'
@@ -20,15 +20,16 @@ def database_connect():
         return cursor
 
     except:
-        return generate_error_response(201, 
-            "Database connection failed, please try again"
-            "Database connection failed")
+        return generate_error_response(201,
+                                       "Database connection failed, please try again"
+                                       "Database connection failed")
+
 
 def generate_error_response(errorCode, bodyString):
     return {'statusCode': errorCode,
-        'body': bodyString,
-        'headers': {'Content-Type': 'application/json'}
-    }
+            'body': bodyString,
+            'headers': {'Content-Type': 'application/json'}
+            }
 
 
 def handler(event, context):
@@ -39,13 +40,16 @@ def handler(event, context):
     cursor.execute(sql)
     if cursor.rowcount == 0:
         return generate_error_response(201, "Please download and run the client software on your computer to complete"
-                                  " account linking and pairing."
-                                  " You can find the download link in the skill's description part.")
-    
+                                            " account linking and pairing."
+                                            " You can find the download link in the skill's description part.")
+
+    cursorResult = [item['id'] for item in cursor.fetchall()]
     data = {
-        'output': cursor.fetchall,
+        'output': cursorResult,
         'timestamp': datetime.datetime.utcnow().isoformat()
     }
+
+
     return {'statusCode': 200,
             'body': json.dumps(data),
             'headers': {'Content-Type': 'application/json'}}
