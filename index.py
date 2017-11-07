@@ -25,31 +25,48 @@ def database_connect():
                                        "Database connection failed")
 
 
-def generate_error_response(errorCode, bodyString):
-    return {'statusCode': errorCode,
-            'body': bodyString,
+def generate_error_response(error_code, body):
+    return {'statusCode': error_code,
+            'body': body,
             'headers': {'Content-Type': 'application/json'}
             }
+
+
+def group_handler(event, context):
+    body = event['body']
+    print('Group handler, body is ' + body)
+    return generate_success_response(body)
 
 
 def handler(event, context):
     cursor = database_connect()
 
-    table_name = 'Groups'
-    sql = "SELECT * FROM %s" % (table_name)
-    cursor.execute(sql)
-    if cursor.rowcount == 0:
-        return generate_error_response(201, "Please download and run the client software on your computer to complete"
-                                            " account linking and pairing."
-                                            " You can find the download link in the skill's description part.")
+    # print(json.dumps(event, indent=4, sort_keys=True))
 
-    cursorResult = [item['id'] for item in cursor.fetchall()]
+    resource_path = event['requestContext']['path']
+
+    if resource_path == '/group':
+        return group_handler(event, context)
+
+
+    # table_name = 'Groups'
+    # sql = "SELECT * FROM %s" % (table_name)
+    # cursor.execute(sql)
+    # if cursor.rowcount == 0:
+    #     return generate_error_response(201, "Please download and run the client software on your computer to complete"
+    #                                         " account linking and pairing."
+    #                                         " You can find the download link in the skill's description part.")
+    #
+    # cursor_result = [item['id'] for item in cursor.fetchall()]
     data = {
-        'output': cursorResult,
+        'output': json.dumps(event),
         'timestamp': datetime.datetime.utcnow().isoformat()
     }
 
+    return generate_error_response(400, 'unsupported command')
 
+
+def generate_success_response(data):
     return {'statusCode': 200,
-            'body': json.dumps(data),
-            'headers': {'Content-Type': 'application/json'}}
+        'body': json.dumps(data),
+        'headers': {'Content-Type': 'application/json'}}
