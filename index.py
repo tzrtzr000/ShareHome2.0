@@ -16,11 +16,11 @@ def database_connect():
         cnx = pymysql.connect(host=host_name, user=db_user_name, password=db_password,
                               db=db_name)
         cursor = cnx.cursor()
-        print("connection success")
+        print("db connection established")
         return cursor
 
     except:
-        return generate_error_response(201,
+        return generate_error_response(500,
                                        "Database connection failed, please try again"
                                        "Database connection failed")
 
@@ -34,20 +34,20 @@ def generate_error_response(error_code, body):
 
 def group_handler(event, context):
     body = event['body']
-    print('Group handler, body is ' + body)
+    print('In Group handler, request body is ' + body)
     return generate_success_response(body)
 
 
 def handler(event, context):
-    cursor = database_connect()
+    print(json.dumps(event, sort_keys=True))
+    print(context)
 
-    # print(json.dumps(event, indent=4, sort_keys=True))
-
-    resource_path = event['requestContext']['path']
+    resource_path = event['path']
 
     if resource_path == '/group':
         return group_handler(event, context)
 
+    # cursor = database_connect()
 
     # table_name = 'Groups'
     # sql = "SELECT * FROM %s" % (table_name)
@@ -58,15 +58,17 @@ def handler(event, context):
     #                                         " You can find the download link in the skill's description part.")
     #
     # cursor_result = [item['id'] for item in cursor.fetchall()]
-    data = {
-        'output': json.dumps(event),
-        'timestamp': datetime.datetime.utcnow().isoformat()
-    }
+    # data = {
+    #     'output': json.dumps(event),
+    #     'timestamp': datetime.datetime.utcnow().isoformat()
+    # }
 
-    return generate_error_response(400, 'unsupported command')
+    return generate_error_response(404, 'Unsupported path')
 
 
 def generate_success_response(data):
-    return {'statusCode': 200,
+    return {
+        'statusCode': 200,
         'body': json.dumps(data),
-        'headers': {'Content-Type': 'application/json'}}
+        'headers': {'Content-Type': 'application/json'}
+    }
