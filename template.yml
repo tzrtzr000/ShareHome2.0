@@ -28,8 +28,14 @@ Resources:
           Properties:
             Path: /
             Method: post
-        groupEvent:
+        groupEvents:
           Type: Api
           Properties:
             Path: /group
             Method: post
+        postEvents:
+          Type: Api
+          Properties:
+            Path: /post
+            Method: [post, push]
+            
