@@ -33,7 +33,7 @@ Resources:
           Properties:
             Path: /group
             Method: post
-        post-put-Events:
+        postPutEvents:
           Type: Api
           Properties:
             Path: /post
