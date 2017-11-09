@@ -6,6 +6,10 @@ import rds_config
 
 # Create a sql database connection
 def database_connect():
+    host_name = rds_config.host_name
+    db_username = rds_config.db_username
+    db_password = rds_config.db_password
+    db_name = rds_config.db_name
     try:
         cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
                               db=db_name)
@@ -34,7 +38,7 @@ def group_handler(event, context):
     
     if body['operation'] == 'create':
         # create a new group
-        pass
+        cursor = database_connect()
     return generate_success_response(body)
 
 
