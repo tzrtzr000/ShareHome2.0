@@ -1,19 +1,13 @@
 import json
 import datetime
 import pymysql
+import rds_config
 
 
 # Create a sql database connection
 def database_connect():
-    ####################################
-    db_name = 'shareHome'
-    host_name = 'alexadb.yishen.org'
-    db_user_name = 'webAccess'
-    db_password = 'G32xsj!klXex&8sl45'
-    ####################################
-
     try:
-        cnx = pymysql.connect(host=host_name, user=db_user_name, password=db_password,
+        cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
                               db=db_name)
         cursor = cnx.cursor()
         print("db connection established")
@@ -35,6 +29,12 @@ def generate_error_response(error_code, body):
 def group_handler(event, context):
     body = event['body']
     print('In Group handler, request body is ' + body)
+    if 'operation' not in body:
+        return generate_error_response(400, 'Missing \'operation\' key in request body')
+    
+    if body['operation'] == 'create':
+        # create a new group
+        
     return generate_success_response(body)
 
 
