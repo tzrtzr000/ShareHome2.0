@@ -1,7 +1,11 @@
 import json
 import datetime
 import pymysql
+import logging
 import rds_config
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 # Create a sql database connection
