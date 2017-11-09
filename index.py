@@ -34,7 +34,7 @@ def group_handler(event, context):
     
     if body['operation'] == 'create':
         # create a new group
-        
+        pass
     return generate_success_response(body)
 
 
