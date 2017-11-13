@@ -51,17 +51,13 @@ def group_handler(event, context):
     
     client = establish_boto3_client()
     response = client.list_users(
-    UserPoolId=aws_config.UserPoolId,
-    AttributesToGet=[
-        'group_id',
-    ],
-    Limit=123
+        UserPoolId=aws_config.UserPoolId
     )
 
-    if body['operation'] == 'create':
-        # create a new group
-        cursor = database_connect()
-    return generate_success_response(response)
+    #if body['operation'] == 'create':
+    #    # create a new group
+    #    cursor = database_connect()
+    return generate_success_response(json.loads(response))
 
 
 def handler(event, context):

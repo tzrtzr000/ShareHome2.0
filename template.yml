@@ -37,5 +37,5 @@ Resources:
           Type: Api
           Properties:
             Path: /post
-            Method: put
+            Method: post
         
