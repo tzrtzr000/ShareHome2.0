@@ -56,12 +56,12 @@ def group_handler(event, context):
         'group_id',
     ],
     Limit=123
-)
+    )
 
     if body['operation'] == 'create':
         # create a new group
         cursor = database_connect()
-    return generate_success_response(body)
+    return generate_success_response(response)
 
 
 def handler(event, context):
