@@ -49,6 +49,15 @@ def group_handler(event, context):
     if 'operation' not in body:
         return generate_error_response(400, 'Missing \'operation\' key in request body')
     
+    client = establish_boto3_client()
+    response = client.list_users(
+    UserPoolId=aws_config.UserPoolId,
+    AttributesToGet=[
+        'group_id',
+    ],
+    Limit=123
+)
+
     if body['operation'] == 'create':
         # create a new group
         cursor = database_connect()
