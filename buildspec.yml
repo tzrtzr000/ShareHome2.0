@@ -4,9 +4,11 @@ phases:
   build:
     commands:
       - pip install pymysql -t ./
+      - pip install boto3 -t ./
       - aws cloudformation package --template template.yml --s3-bucket $S3_BUCKET --output-template template-export.yml
 artifacts:
   type: zip
   files:
     - template-export.yml
     - pymysql/*
+    - boto3/*
