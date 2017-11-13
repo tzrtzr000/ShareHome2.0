@@ -3,6 +3,8 @@ import datetime
 import pymysql
 import logging
 import rds_config
+import aws_config
+import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -25,6 +27,13 @@ def database_connect():
         return generate_error_response(500,
                                        "Database connection failed, please try again"
                                        "Database connection failed")
+def establish_boto3_client():
+    client = boto3.client(
+    'cognito-idp',
+    aws_access_key_id=aws_config.aws_access_key_id,
+    aws_secret_access_key=aws_config.aws_secret_access_key
+    )
+    return client
 
 
 def generate_error_response(error_code, body):
