@@ -38,4 +38,9 @@ Resources:
           Properties:
             Path: /post
             Method: post
+        taskEvents:
+          Type: Api
+          Properties:
+            Path: /task
+            Method: post
         
