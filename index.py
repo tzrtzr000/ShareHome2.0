@@ -10,6 +10,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+
 # Create a sql database connection
 def database_connect():
     host_name = rds_config.host_name
@@ -17,9 +18,9 @@ def database_connect():
     db_password = rds_config.db_password
     db_name = rds_config.db_name
     try:
-        cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
+        global cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
                               db=db_name)
-        cursor = cnx.cursor()
+        global cursor = cnx.cursor()
         print("db connection established")
         return cursor
 
@@ -28,12 +29,12 @@ def database_connect():
                                        "Database connection failed, please try again"
                                        "Database connection failed")
 def establish_boto3_client():
-    client = boto3.client(
+    global boto_client = boto3.client(
     'cognito-idp',
     aws_access_key_id=aws_config.aws_access_key_id,
     aws_secret_access_key=aws_config.aws_secret_access_key
     )
-    return client
+    return
 
 
 def generate_error_response(error_code, body):
@@ -49,10 +50,18 @@ def group_handler(event, context):
     if 'operation' not in body:
         return generate_error_response(400, 'Missing \'operation\' key in request body')
     
-    client = establish_boto3_client()
-    response = client.list_users(
+    establish_boto3_client()
+    # Now we have the client
+    operation = body['operation']
+    if (operation == 'createGroup'):
+        
+    else if (operation == 'addUser'):
+        
+    else if (operation == 'removeUser')
+    response = boto_client.list_users(
         UserPoolId=aws_config.UserPoolId
     )
+
 
     #if body['operation'] == 'create':
     #    # create a new group
