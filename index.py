@@ -127,6 +127,7 @@ def handler(event, context):
 
     # cursor = database_connect()
 
+
     # table_name = 'Groups'
     # sql = "SELECT * FROM %s" % (table_name)
     # cursor.execute(sql)
