@@ -101,11 +101,19 @@ def task_handler(event, context):
         'timestamp': datetime.datetime.utcnow().isoformat()
     }
 
-    if operation == 'addPost':
+    if operation == 'addTask':
+        sql = 'INSERT INTO Tasks (groupName, taskTitle, taskContent, taskDuration, taskUsers, taskSolved)' % (table_name, group_name)
+        print(sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+
+        data = {
+            'result': json.dumps(rows),
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }
+    elif operation == 'removeTask':
         pass
-    elif operation == 'removePost':
-        pass
-    elif operation == 'removeUser':
+    elif operation == 'removeTask':
         pass
 
     # if body['operation'] == 'create':
