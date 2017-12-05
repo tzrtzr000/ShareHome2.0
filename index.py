@@ -7,7 +7,6 @@ import aws_config
 import boto3
 import collections
 
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -56,7 +55,7 @@ def group_handler(event, context):
 
     if 'operation' not in json_body:
         return generate_error_response(400, 'Missing \'operation\' key in request body')
-    
+
     init_boto3_client()
     # Now we have the client
     operation = json_body['operation']
@@ -71,8 +70,7 @@ def group_handler(event, context):
         UserPoolId=aws_config.UserPoolId
     )
 
-
-    #if body['operation'] == 'create':
+    # if body['operation'] == 'create':
     #    # create a new group
     #    cursor = database_connect()
     return generate_success_response(json.loads(response))
@@ -87,7 +85,6 @@ def task_handler(event, context):
     if query_string_parameters is None:
         return generate_error_response(400, 'Missing query_string_parameters')
 
-    operation = query_string_parameters['operation']
     group_name = query_string_parameters['groupName']
 
     if event['httpMethod'] == "GET":
@@ -113,14 +110,15 @@ def task_handler(event, context):
     elif event['httpMethod'] == "POST":
         if 'operation' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'operation\' key in request body')
+        operation = query_string_parameters['operation']
 
         task = json.loads(event['body'])
 
         if operation == 'addTask':
             sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUsers, taskSolved) ' \
                   'VALUES (%s,%s,%s,%s,%s,%s)' % (
-                table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
-                task['taskUsers'], task['taskSolved'] )
+                      table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
+                      task['taskUsers'], task['taskSolved'])
 
             print(sql)
             cursor.execute(sql)
