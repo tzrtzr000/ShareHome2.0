@@ -1,0 +1,153 @@
+---
+swagger: "2.0"
+info:
+  version: "1.0"
+  title: "awscodestar-sharehome2-0-lambda"
+host: "5wyfvovh46.execute-api.us-east-1.amazonaws.com"
+basePath: "/Prod"
+schemes:
+- "https"
+paths:
+  /:
+    get:
+      produces:
+      - "application/json"
+      parameters:
+      - name: "gn"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "operation"
+        in: "query"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/task"
+    post:
+      responses: {}
+  /group:
+    post:
+      responses: {}
+  /post:
+    post:
+      responses: {}
+  /task:
+    get:
+      produces:
+      - "application/json"
+      parameters:
+      - name: "groupName"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "operation"
+        in: "query"
+        required: false
+        type: "string"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/taskList"
+    post:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "groupName"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "operation"
+        in: "query"
+        required: false
+        type: "string"
+      - in: "body"
+        name: "task"
+        required: true
+        schema:
+          $ref: "#/definitions/task"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/task"
+definitions:
+  task:
+    type: "object"
+    properties:
+      groupName:
+        type: "string"
+        description: "An explanation about the purpose of this instance."
+        title: "The Groupname Schema."
+        default: ""
+      taskTitle:
+        type: "string"
+        description: "An explanation about the purpose of this instance."
+        title: "The Tasktitle Schema."
+        default: ""
+      taskContent:
+        type: "string"
+        description: "An explanation about the purpose of this instance."
+        title: "The Taskcontent Schema."
+        default: ""
+      taskDuration:
+        type: "integer"
+        description: "An explanation about the purpose of this instance."
+        title: "The Taskduration Schema."
+      taskUsers:
+        type: "array"
+        items:
+          type: "string"
+          description: "An explanation about the purpose of this instance."
+          title: "The 0 Schema."
+          default: ""
+      taskSolved:
+        type: "boolean"
+        description: "An explanation about the purpose of this instance."
+        title: "The Tasksolved Schema."
+        default: false
+  taskList:
+    type: "array"
+    items:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          description: "An explanation about the purpose of this instance."
+          title: "The Id Schema."
+        groupName:
+          type: "string"
+          description: "An explanation about the purpose of this instance."
+          title: "The Groupname Schema."
+          default: ""
+        taskTitle:
+          type: "string"
+          description: "An explanation about the purpose of this instance."
+          title: "The Tasktitle Schema."
+          default: ""
+        taskContent:
+          type: "string"
+          description: "An explanation about the purpose of this instance."
+          title: "The Taskcontent Schema."
+          default: ""
+        taskDuration:
+          type: "integer"
+          description: "An explanation about the purpose of this instance."
+          title: "The Taskduration Schema."
+        taskUsers:
+          type: "array"
+          items:
+            type: "string"
+            description: "An explanation about the purpose of this instance."
+            title: "The 0 Schema."
+            default: ""
+        taskSolved:
+          type: "boolean"
+          description: "An explanation about the purpose of this instance."
+          title: "The Tasksolved Schema."
+          default: false

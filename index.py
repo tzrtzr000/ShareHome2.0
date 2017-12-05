@@ -5,6 +5,8 @@ import logging
 import rds_config
 import aws_config
 import boto3
+import collections
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -75,33 +77,51 @@ def group_handler(event, context):
 
 
 def task_handler(event, context):
-    body = event['body']
-    print('In task handler, request body is ' + body)
-    json_body = json.loads(event['body'])
+    queryStringParameters = event["queryStringParameters"]
+    #print('In task handler, query parameter is ' + queryStringParameters)
 
-    if 'operation' not in json_body:
+    if 'operation' not in queryStringParameters:
         return generate_error_response(400, 'Missing \'operation\' key in request body')
 
     # establish_boto3_client()
     # Now we have the client
-    operation = json_body['operation']
+    operation = queryStringParameters['operation']
 
     database_connect()
 
     table_name = 'Tasks'
-    group_name = json_body['groupName']
+    group_name = queryStringParameters['groupName']
 
-    sql = 'SELECT * FROM %s WHERE groupName =\'%s\'' % (table_name, group_name)
-    print(sql)
-    cursor.execute(sql)
-    rows = cursor.fetchall()
+    # sql = 'SELECT * FROM %s WHERE groupName =\'%s\'' % (table_name, group_name)
+    # print(sql)
+    # cursor.execute(sql)
+    # rows = cursor.fetchall()
+    #
+    # data = {
+    #     'result': json.dumps(rows),
+    #     'timestamp': datetime.datetime.utcnow().isoformat()
+    # }
+    if event['httpMethod'] == "GET":
+        sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved FROM %s WHERE groupName =\'%s\'' % (
+        'Tasks', 'lambdaTestGroup')
+        print(sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        row_array_list = []
+        for row in rows:
+            d = collections.OrderedDict()
+            d['groupName'] = row[0]
+            d['taskTitle'] = row[1]
+            d['taskContent'] = row[2]
+            d['taskDuration'] = row[3]
+            d['taskUser'] = row[4]
+            d['taskSolved'] = True if row[5] else False
+            row_array_list.append(d)
 
-    data = {
-        'result': json.dumps(rows),
-        'timestamp': datetime.datetime.utcnow().isoformat()
-    }
+        data = json.dumps(row_array_list)
 
-    if operation == 'addTask':
+
+    elif operation == 'addTask':
         sql = 'INSERT INTO Tasks (groupName, taskTitle, taskContent, taskDuration, taskUsers, taskSolved)' % (table_name, group_name)
         print(sql)
         cursor.execute(sql)
@@ -155,6 +175,6 @@ def handler(event, context):
 def generate_success_response(data):
     return {
         'statusCode': 200,
-        'body': json.dumps(data),
+        'body': data,
         'headers': {'Content-Type': 'application/json'}
     }
