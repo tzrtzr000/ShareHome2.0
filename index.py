@@ -21,7 +21,7 @@ def init_db_connection():
         global cnx
         global cursor
         cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
-                              db=db_name)
+                              db=db_name, autocommit=True)
         cursor = cnx.cursor()
         print("db connection established")
         return cursor
