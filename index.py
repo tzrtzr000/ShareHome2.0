@@ -123,10 +123,7 @@ def task_handler(event, context):
             cursor.execute(sql)
             rows = cursor.fetchall()
 
-            data = {
-                'result': json.dumps(rows),
-                'timestamp': datetime.datetime.utcnow().isoformat()
-            }
+            data = json.dumps(rows)
 
         if operation == 'removeTask':
             data = {
