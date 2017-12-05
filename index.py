@@ -24,7 +24,7 @@ def init_db_connection():
                               db=db_name, autocommit=True)
         cursor = cnx.cursor()
         print("db connection established")
-        return cursor
+        return
     except:
         return generate_error_response(500,
                                        "Database connection failed, please try again"
@@ -149,6 +149,8 @@ def handler(event, context):
 
 
 def generate_success_response(data):
+    cursor.close()
+    cnx.close()
     return {
         'statusCode': 200,
         'body': data,
