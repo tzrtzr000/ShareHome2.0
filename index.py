@@ -6,6 +6,7 @@ import rds_config
 import aws_config
 import boto3
 import collections
+import time
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -114,10 +115,10 @@ def task_handler(event, context):
         task = json.loads(event['body'])
 
         if operation == 'add':
-            sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved) ' \
-                  'VALUES (\'%s\',\'%s\',\'%s\',%s,null,%s)' % (
+            sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, lastRotated) ' \
+                  'VALUES (\'%s\',\'%s\',\'%s\',%s,null,%s, \'%s\')' % (
                       table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
-                       task['taskSolved'])
+                       task['taskSolved'], time.strftime('%Y-%m-%d %H:%M:%S'))
 
             print(sql)
             cursor.execute(sql)
