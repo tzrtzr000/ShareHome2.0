@@ -85,11 +85,10 @@ def task_handler(event, context):
     if query_string_parameters is None:
         return generate_error_response(400, 'Missing query_string_parameters')
 
-    group_name = query_string_parameters['groupName']
-
     if event['httpMethod'] == "GET":
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
+        group_name = query_string_parameters['groupName']
 
         sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved FROM %s WHERE groupName =\'%s\'' % (
             table_name, group_name)
@@ -114,11 +113,11 @@ def task_handler(event, context):
 
         task = json.loads(event['body'])
 
-        if operation == 'addTask':
-            sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUsers, taskSolved) ' \
-                  'VALUES (%s,%s,%s,%s,%s,%s)' % (
+        if operation == 'add':
+            sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved) ' \
+                  'VALUES (\'%s\',\'%s\',\'%s\',%s,null,%s)' % (
                       table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
-                      task['taskUsers'], task['taskSolved'])
+                       task['taskSolved'])
 
             print(sql)
             cursor.execute(sql)
