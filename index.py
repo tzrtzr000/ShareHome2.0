@@ -91,7 +91,7 @@ def task_handler(event, context):
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
 
-        sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved FROM %s WHERE groupName =\'%s\'' % (
+        sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, taskID, lastRotated FROM %s WHERE groupName =\'%s\'' % (
             table_name, group_name)
         cursor.execute(sql)
         rows = cursor.fetchall()
@@ -104,6 +104,8 @@ def task_handler(event, context):
             d['taskDuration'] = row[3]
             d['taskUser'] = row[4]
             d['taskSolved'] = True if row[5] else False
+            d['taskID'] = row[6]
+            d['lastRotated'] = row[7].strftime('%Y-%m-%d %H:%M:%S')
             row_array_list.append(d)
 
         data = json.dumps(row_array_list)
