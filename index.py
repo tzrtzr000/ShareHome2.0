@@ -115,16 +115,22 @@ def task_handler(event, context):
         task = json.loads(event['body'])
 
         if operation == 'add':
+            insert_time = time.strftime('%Y-%m-%d %H:%M:%S')
             sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, lastRotated) ' \
                   'VALUES (\'%s\',\'%s\',\'%s\',%s,null,%s, \'%s\')' % (
                       table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
-                       task['taskSolved'], time.strftime('%Y-%m-%d %H:%M:%S'))
+                      task['taskSolved'], insert_time)
 
             print(sql)
             cursor.execute(sql)
             rows = cursor.fetchall()
 
-            data = json.dumps(rows)
+            sql = 'SELECT taskID from %s where groupName = \'%s\' and lastRotated = \'%s\'' % (
+            table_name, task['groupName'], insert_time)
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+            data = json.dumps({"taskID": rows[0][0]})
 
         if operation == 'removeTask':
             data = {

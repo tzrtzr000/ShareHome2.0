@@ -1,0 +1,10 @@
+{
+  "groupName": "apitest2",
+  "taskTitle": " title",
+  "taskContent": "tes",
+  "taskDuration": 60,
+  "taskUser": "userID",
+  "taskSolved": false,
+  "taskID": 15,
+  "lastRotated": "dateString"
+}
