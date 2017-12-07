@@ -11,6 +11,9 @@ import time
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+cnx = None
+cursor = None
+
 
 # Create a sql database connection
 def init_db_connection():
@@ -50,14 +53,30 @@ def generate_error_response(error_code, body):
 
 
 def group_handler(event, context):
-    body = event['body']
-    print('In Group handler, request body is ' + body)
-    json_body = json.loads(event['body'])
-
-    if 'operation' not in json_body:
-        return generate_error_response(400, 'Missing \'operation\' key in request body')
-
+    table_name = 'Groups'
     init_boto3_client()
+
+    query_string_parameters = event["queryStringParameters"]
+    if query_string_parameters is None:
+        return generate_error_response(404, 'Missing query_string_parameters')
+
+    if 'userName' not in query_string_parameters:
+        return generate_error_response(400, 'Missing \'userName\' key in request body')
+    user_name = query_string_parameters['userName']
+
+    if event['httpMethod'] == "GET":
+        response = boto_client.admin_list_groups_for_user(
+                Username=user_name,
+                UserPoolId=aws_config.UserPoolId,
+                Limit=60
+            )
+        if len(response['Groups']) != 0:
+            group_name = response['Groups'][0]['GroupName']
+        else:
+            group_name = None
+        data = { "groupName": group_name}
+        return generate_success_response(json.dumps(data))
+
     # Now we have the client
     operation = json_body['operation']
 
@@ -158,8 +177,12 @@ def handler(event, context):
 
 
 def generate_success_response(data):
-    cursor.close()
-    cnx.close()
+    global cnx
+    if cnx is not None:
+        cursor.close()
+        cnx.close()
+        cnx = None
+
     return {
         'statusCode': 200,
         'body': data,
