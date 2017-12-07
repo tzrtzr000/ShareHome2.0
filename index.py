@@ -141,13 +141,29 @@ def group_handler(event, context):
                 UserPoolId=aws_config.UserPoolId
             )
             # Then add user to the group
-            boto_client.admin_add_user_to_group(
-                UserPoolId=aws_config.UserPoolId,
-                Username=user_name,
-                GroupName=group_name
-            )
+            boto_add_user_to_only_one_group(user_name, group_name)
+
         return generate_success_response(json.dumps({"result": "success"}))
 
+
+def boto_add_user_to_only_one_group(user_name, group_name):
+    # first check if user is already in a group
+    response = boto_admin_list_groups_for_user(user_name)['Groups']
+    for group in response:
+        # user in a group already
+        old_group_name = group['GroupName']
+        boto_client.admin_remove_user_from_group(
+            UserPoolId=aws_config.UserPoolId,
+            Username=user_name,
+            GroupName=old_group_name
+        )
+        print("user removed from group: " + group_name)
+
+    boto_client.admin_add_user_to_group(
+        UserPoolId=aws_config.UserPoolId,
+        Username=user_name,
+        GroupName=group_name
+    )
 
 def task_handler(event, context):
     init_db_connection()
