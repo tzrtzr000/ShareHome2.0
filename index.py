@@ -59,11 +59,13 @@ def boto_admin_list_groups_for_user(user_name):
         Limit=60
     )
 
+# query string to dictionary
 def qs_to_dict(qs):
     final_dict = dict()
     for item in qs.split("&"):
         final_dict[item.split("=")[0]] = item.split("=")[1]
     return final_dict
+
 
 def group_handler(event, context):
     table_name = 'Groups'
@@ -72,6 +74,7 @@ def group_handler(event, context):
     query_string_parameters = event["queryStringParameters"]
     if query_string_parameters is None:
         if event['body'] is not None:
+            print("SDK just fucked up again")
             query_string_parameters = qs_to_dict(event['body'])
         else:
             return generate_error_response(404, 'Missing query_string_parameters')
@@ -106,6 +109,8 @@ def group_handler(event, context):
                 group_name = None
             data = [group_name]
             return generate_success_response(json.dumps(data))
+        else:
+            return generate_error_response(404, "Not supported operation: " + operation)
     elif event['httpMethod'] == "POST":
         # Now we have the client
 
@@ -114,6 +119,16 @@ def group_handler(event, context):
         group_name = query_string_parameters['groupName']
 
         if operation == 'add':
+            # first check if user is already in a group
+            response = boto_admin_list_groups_for_user(user_name)['Groups']
+            for group in response:
+                # user in a group already
+                group_name = group['GroupName']
+                boto_client.admin_remove_user_from_group(
+                    UserPoolId=aws_config.UserPoolId,
+                    Username=user_name,
+                    GroupName=group_name
+                )
 
             boto_client.admin_add_user_to_group(
                 UserPoolId=aws_config.UserPoolId,
