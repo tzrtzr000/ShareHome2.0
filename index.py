@@ -74,26 +74,35 @@ def group_handler(event, context):
             group_name = response['Groups'][0]['GroupName']
         else:
             group_name = None
-        data = { "groupName": group_name}
+        data = {"result": group_name}
         return generate_success_response(json.dumps(data))
+    elif event['httpMethod'] == "POST":
+        # Now we have the client
+        if 'operation' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'operation\' key in request body')
+        if 'groupName' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'groupName\' key in request body')
+        operation = query_string_parameters['operation']
+        group_name = query_string_parameters['groupName']
 
-    # Now we have the client
-    operation = json_body['operation']
-
-    if operation == 'createGroup':
-        pass
-    elif operation == 'addUser':
-        pass
-    elif operation == 'removeUser':
-        pass
-    response = boto_client.list_users(
-        UserPoolId=aws_config.UserPoolId
-    )
-
-    # if body['operation'] == 'create':
-    #    # create a new group
-    #    cursor = database_connect()
-    return generate_success_response(json.loads(response))
+        if operation == 'add':
+            boto_client.admin_add_user_to_group(
+                UserPoolId=aws_config.UserPoolId,
+                Username=user_name,
+                GroupName=group_name
+            )
+        elif operation == 'create':
+            boto_client.create_group(
+                GroupName=group_name,
+                UserPoolId=aws_config.UserPoolId
+            )
+            # Then add user to the group
+            boto_client.admin_add_user_to_group(
+                UserPoolId=aws_config.UserPoolId,
+                Username=user_name,
+                GroupName=group_name
+            )
+        return generate_success_response(json.dumps({"result": "success"}))
 
 
 def task_handler(event, context):
