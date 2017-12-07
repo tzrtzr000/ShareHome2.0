@@ -52,40 +52,69 @@ def generate_error_response(error_code, body):
             }
 
 
+def boto_admin_list_groups_for_user(user_name):
+    return boto_client.admin_list_groups_for_user(
+        Username=user_name,
+        UserPoolId=aws_config.UserPoolId,
+        Limit=60
+    )
+
+def qs_to_dict(qs):
+    final_dict = dict()
+    for item in qs.split("&"):
+        final_dict[item.split("=")[0]] = item.split("=")[1]
+    return final_dict
+
 def group_handler(event, context):
     table_name = 'Groups'
     init_boto3_client()
 
     query_string_parameters = event["queryStringParameters"]
     if query_string_parameters is None:
-        return generate_error_response(404, 'Missing query_string_parameters')
+        if event['body'] is not None:
+            query_string_parameters = qs_to_dict(event['body'])
+        else:
+            return generate_error_response(404, 'Missing query_string_parameters')
+    if 'operation' not in query_string_parameters:
+        return generate_error_response(400, 'Missing \'operation\' key in request body')
+    operation = query_string_parameters['operation']
 
     if 'userName' not in query_string_parameters:
         return generate_error_response(400, 'Missing \'userName\' key in request body')
     user_name = query_string_parameters['userName']
 
     if event['httpMethod'] == "GET":
-        response = boto_client.admin_list_groups_for_user(
-                Username=user_name,
-                UserPoolId=aws_config.UserPoolId,
-                Limit=60
-            )
-        if len(response['Groups']) != 0:
-            group_name = response['Groups'][0]['GroupName']
-        else:
-            group_name = None
-        data = {"result": group_name}
-        return generate_success_response(json.dumps(data))
+
+        if operation == 'listMembers':
+            response = boto_admin_list_groups_for_user(user_name)
+            if len(response['Groups']) != 0:
+                group_name = response['Groups'][0]['GroupName']
+                response = boto_client.list_users_in_group(
+                    UserPoolId=aws_config.UserPoolId,
+                    GroupName=group_name,
+                    Limit=60
+                )
+                return_list = [user['Username'] for user in response['Users']]
+            else:
+                return_list = []
+            return generate_success_response(json.dumps(return_list))
+        elif operation == 'getGroupName':
+            response = boto_admin_list_groups_for_user(user_name)
+            if len(response['Groups']) != 0:
+                group_name = response['Groups'][0]['GroupName']
+            else:
+                group_name = None
+            data = [group_name]
+            return generate_success_response(json.dumps(data))
     elif event['httpMethod'] == "POST":
         # Now we have the client
-        if 'operation' not in query_string_parameters:
-            return generate_error_response(400, 'Missing \'operation\' key in request body')
+
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
-        operation = query_string_parameters['operation']
         group_name = query_string_parameters['groupName']
 
         if operation == 'add':
+
             boto_client.admin_add_user_to_group(
                 UserPoolId=aws_config.UserPoolId,
                 Username=user_name,
@@ -156,7 +185,7 @@ def task_handler(event, context):
             rows = cursor.fetchall()
 
             sql = 'SELECT taskID from %s where groupName = \'%s\' and lastRotated = \'%s\'' % (
-            table_name, task['groupName'], insert_time)
+                table_name, task['groupName'], insert_time)
             cursor.execute(sql)
             rows = cursor.fetchall()
 
