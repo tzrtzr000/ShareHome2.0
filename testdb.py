@@ -7,6 +7,8 @@ import aws_config
 import boto3
 import collections
 import index
+from time import gmtime, strftime
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -86,33 +88,16 @@ elif sql_op == 'INSERT':
 
 
 def push_notification (user_name, group_name, push_title, push_body):
+    # response = boto_pinpoint_client.get_segments(
+    #     ApplicationId=aws_config.pinpoint_application_id
+    # )
+    # print(response)
+    current_time = strftime('%Y-%m-%dT%H:%M:%S', gmtime())
+    print(current_time)
     response = boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
         WriteCampaignRequest={
-            'AdditionalTreatments': [
-                {
-                    'MessageConfiguration': {
-                        'GCMMessage': {
-                            'Action': 'OPEN_APP',
-                            'Body': push_body,
-                            'ImageIconUrl': 'string',
-                            'ImageSmallIconUrl': 'string',
-                            'SilentPush': False,
-                            'Title': push_title
-                        }
-                    },
-                    'Schedule': {
-                        'EndTime': 'string',
-                        'Frequency': 'ONCE',
-                        'IsLocalTime': False,
-
-                        'StartTime': 'string',
-                    },
-                    'SizePercent': 100
-                },
-            ],
             'Description': 'Campaign created by backend lambda',
-            'HoldoutPercent': 0,
             'IsPaused': False,
             'MessageConfiguration': {
                 'GCMMessage': {
@@ -124,15 +109,12 @@ def push_notification (user_name, group_name, push_title, push_body):
             },
             'Name': 'Lambda Campaign',
             'Schedule': {
-                'EndTime': 'string',
                 'Frequency': 'ONCE',
                 'IsLocalTime': False,
-                'StartTime': 'string'
+                'StartTime': current_time
             },
-            'SegmentId': 'AllUsers',
-            'SegmentVersion': 1,
-            'TreatmentDescription': 'string',
-            'TreatmentName': 'string'
+            'SegmentId': 'a1a378598b1346c0bb199874181ff542',
+            'SegmentVersion': 1
         }
     )
 
@@ -149,4 +131,4 @@ def init_boto3_client():
     return
 
 init_boto3_client()
-push_notification("s", "s", "title", "content")
+push_notification("s", "s", "fyfsb", "fyfsb2")
