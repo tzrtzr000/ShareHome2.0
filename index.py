@@ -165,6 +165,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
         GroupName=group_name
     )
 
+
 def task_handler(event, context):
     init_db_connection()
 
@@ -227,7 +228,67 @@ def task_handler(event, context):
                 'unknown': 'unknown'
             }
             pass
+    return generate_success_response(data)
 
+
+def post_handler(event, context):
+    init_db_connection()
+
+    table_name = 'Posts'
+
+    query_string_parameters = event["queryStringParameters"]
+    if query_string_parameters is None:
+        return generate_error_response(400, 'Missing query_string_parameters')
+
+    #
+    if event['httpMethod'] == "GET":
+        if 'groupName' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'groupName\' key in request body')
+        group_name = query_string_parameters['groupName']
+        print(group_name)
+        sql = 'SELECT groupName, postTitle, postContent, postUrgent, postID FROM %s WHERE groupName =\'%s\'' % (
+            table_name, group_name)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        row_array_list = []
+        for row in rows:
+            d = collections.OrderedDict()
+            d['groupName'] = row[0]
+            d['postTitle'] = row[1]
+            d['postContent'] = row[2]
+            d['postUrgent'] = row[3]
+            d['postID'] = True if row[4] else False
+            row_array_list.append(d)
+        data = json.dumps(row_array_list)
+    elif event['httpMethod'] == "POST":
+        if 'operation' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'operation\' key in request body')
+        operation = query_string_parameters['operation']
+
+        post = json.loads(event['body'])
+
+        if operation == 'add':
+            sql = 'INSERT INTO %s (groupName, postTitle, postContent, postUrgent) ' \
+                  'VALUES (\'%s\',\'%s\',\'%s\', %s)' % (
+                      table_name, post['groupName'], post['postTitle'], post['postContent'],
+                      'True' if post['postUrgent'] else 'False')
+
+            print(sql)
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+            sql = 'SELECT postID from %s where groupName = \'%s\' and postTitle = \'%s\'' % (
+                table_name, post['groupName'], post['postTitle'])
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+            data = json.dumps({"result": rows[0][0]})
+
+        if operation == 'removeTask':
+            data = {
+                'unknown': 'unknown'
+            }
+            pass
     return generate_success_response(data)
 
 
@@ -241,8 +302,9 @@ def handler(event, context):
         return group_handler(event, context)
     elif resource_path == '/task':
         return task_handler(event, context)
-
-    return generate_error_response(404, 'Unsupported path')
+    elif resource_path == '/post':
+        return post_handler(event, context)
+    return generate_error_response(404, 'Unsupported path: ' + resource_path)
 
 
 def generate_success_response(data):
