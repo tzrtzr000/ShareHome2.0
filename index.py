@@ -256,8 +256,8 @@ def post_handler(event, context):
             d['groupName'] = row[0]
             d['postTitle'] = row[1]
             d['postContent'] = row[2]
-            d['postUrgent'] = row[3]
-            d['postID'] = True if row[4] else False
+            d['postUrgent'] = True if row[3] else False
+            d['postID'] = row[4]
             row_array_list.append(d)
         data = json.dumps(row_array_list)
     elif event['httpMethod'] == "POST":
