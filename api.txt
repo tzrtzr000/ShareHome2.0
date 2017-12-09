@@ -8,3 +8,36 @@
   "taskID": 15,
   "lastRotated": "dateString"
 }
+
+post
+
+{
+  "groupName": "apitest2",
+  "postTitle": " title",
+  "postContent": "tes",
+  "postUrgent": true,
+  "postID": 15
+}
+
+postList:
+
+[
+	{
+  "groupName": "apitest2",
+  "postTitle": " title",
+  "postContent": "tes",
+  "postUrgent": True,
+  "postID": 15
+}
+
+,
+
+{
+  "groupName": "apitest2",
+  "postTitle": " title",
+  "postContent": "tes",
+  "postUrgent": True,
+  "postID": 15
+}
+
+]

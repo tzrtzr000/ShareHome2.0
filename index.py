@@ -36,9 +36,15 @@ def init_db_connection():
 
 
 def init_boto3_client():
-    global boto_client
-    boto_client = boto3.client(
+    global boto_cognito_client, boto_pinpoint_client
+    boto_cognito_client = boto3.client(
         'cognito-idp',
+        aws_access_key_id=aws_config.aws_access_key_id,
+        aws_secret_access_key=aws_config.aws_secret_access_key
+    )
+    boto_pinpoint_client = boto3.client(
+        'pinpoint',
+        region_name=aws_config.region,
         aws_access_key_id=aws_config.aws_access_key_id,
         aws_secret_access_key=aws_config.aws_secret_access_key
     )
@@ -53,7 +59,7 @@ def generate_error_response(error_code, body):
 
 
 def boto_admin_list_groups_for_user(user_name):
-    return boto_client.admin_list_groups_for_user(
+    return boto_cognito_client.admin_list_groups_for_user(
         Username=user_name,
         UserPoolId=aws_config.UserPoolId,
         Limit=60
@@ -79,11 +85,11 @@ def group_handler(event, context):
         else:
             return generate_error_response(404, 'Missing query_string_parameters')
     if 'operation' not in query_string_parameters:
-        return generate_error_response(400, 'Missing \'operation\' key in request body')
+        return generate_error_response(400, 'Missing \'operation\' key in query_string')
     operation = query_string_parameters['operation']
 
     if 'userName' not in query_string_parameters:
-        return generate_error_response(400, 'Missing \'userName\' key in request body')
+        return generate_error_response(400, 'Missing \'userName\' key in query_string')
     user_name = query_string_parameters['userName']
 
     if event['httpMethod'] == "GET":
@@ -92,7 +98,7 @@ def group_handler(event, context):
             response = boto_admin_list_groups_for_user(user_name)
             if len(response['Groups']) != 0:
                 group_name = response['Groups'][0]['GroupName']
-                response = boto_client.list_users_in_group(
+                response = boto_cognito_client.list_users_in_group(
                     UserPoolId=aws_config.UserPoolId,
                     GroupName=group_name,
                     Limit=60
@@ -124,19 +130,21 @@ def group_handler(event, context):
             for group in response:
                 # user in a group already
                 group_name = group['GroupName']
-                boto_client.admin_remove_user_from_group(
+                boto_cognito_client.admin_remove_user_from_group(
                     UserPoolId=aws_config.UserPoolId,
                     Username=user_name,
                     GroupName=group_name
                 )
 
-            boto_client.admin_add_user_to_group(
+                boto_cognito_client.admin_add_user_to_group(
                 UserPoolId=aws_config.UserPoolId,
                 Username=user_name,
                 GroupName=group_name
             )
+            # push notification
+            push_notification(user_name, group_name, "lambdatitle", "lambdacontent")
         elif operation == 'create':
-            boto_client.create_group(
+            boto_cognito_client.create_group(
                 GroupName=group_name,
                 UserPoolId=aws_config.UserPoolId
             )
@@ -146,20 +154,72 @@ def group_handler(event, context):
         return generate_success_response(json.dumps({"result": "success"}))
 
 
+def push_notification (user_name, group_name, push_title, push_body):
+    response = boto_pinpoint_client.create_campaign(
+        ApplicationId=aws_config.pinpoint_application_id,
+        WriteCampaignRequest={
+            'AdditionalTreatments': [
+                {
+                    'MessageConfiguration': {
+                        'GCMMessage': {
+                            'Action': 'OPEN_APP',
+                            'Body': push_body,
+                            'ImageIconUrl': 'string',
+                            'ImageSmallIconUrl': 'string',
+                            'SilentPush': False,
+                            'Title': push_title
+                        }
+                    },
+                    'Schedule': {
+                        'EndTime': 'string',
+                        'Frequency': 'ONCE',
+                        'IsLocalTime': False,
+
+                        'StartTime': 'string',
+                    },
+                    'SizePercent': 100
+                },
+            ],
+            'Description': 'Campaign created by backend lambda',
+            'HoldoutPercent': 0,
+            'IsPaused': False,
+            'MessageConfiguration': {
+                'GCMMessage': {
+                    'Action': 'OPEN_APP',
+                    'Body': push_body,
+                    'SilentPush': False,
+                    'Title': push_title,
+                }
+            },
+            'Name': 'Lambda Campaign',
+            'Schedule': {
+                'EndTime': 'string',
+                'Frequency': 'ONCE',
+                'IsLocalTime': False,
+                'StartTime': 'string'
+            },
+            'SegmentId': 'AllUsers',
+            'SegmentVersion': 1,
+            'TreatmentDescription': 'string',
+            'TreatmentName': 'string'
+        }
+    )
+
+
 def boto_add_user_to_only_one_group(user_name, group_name):
     # first check if user is already in a group
     response = boto_admin_list_groups_for_user(user_name)['Groups']
     for group in response:
         # user in a group already
         old_group_name = group['GroupName']
-        boto_client.admin_remove_user_from_group(
+        boto_cognito_client.admin_remove_user_from_group(
             UserPoolId=aws_config.UserPoolId,
             Username=user_name,
             GroupName=old_group_name
         )
-        print("user removed from group: " + group_name)
+        print("user " + user_name + " removed from group: " + group_name)
 
-    boto_client.admin_add_user_to_group(
+        boto_cognito_client.admin_add_user_to_group(
         UserPoolId=aws_config.UserPoolId,
         Username=user_name,
         GroupName=group_name
@@ -235,6 +295,13 @@ def post_handler(event, context):
     init_db_connection()
 
     table_name = 'Posts'
+    post_sample = {
+        "groupName": "post_sample_group",
+        "postTitle": "post_sample_title",
+        "postContent": "post_sample_content",
+        "postUrgent": False,
+        "postID": 100
+    }
 
     query_string_parameters = event["queryStringParameters"]
     if query_string_parameters is None:
@@ -245,9 +312,9 @@ def post_handler(event, context):
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
-        print(group_name)
-        sql = 'SELECT groupName, postTitle, postContent, postUrgent, postID FROM %s WHERE groupName =\'%s\'' % (
-            table_name, group_name)
+
+        select_cause = dict_to_sql("SELECT", table_name, post_sample)
+        sql = '%s WHERE groupName =\'%s\'' % (select_cause, group_name)
         cursor.execute(sql)
         rows = cursor.fetchall()
         row_array_list = []
@@ -268,10 +335,14 @@ def post_handler(event, context):
         post = json.loads(event['body'])
 
         if operation == 'add':
-            sql = 'INSERT INTO %s (groupName, postTitle, postContent, postUrgent) ' \
-                  'VALUES (\'%s\',\'%s\',\'%s\', %s)' % (
-                      table_name, post['groupName'], post['postTitle'], post['postContent'],
-                      'True' if post['postUrgent'] else 'False')
+            if 'postID' in post:
+                # we want to update
+                update_clause = dict_to_sql("UPDATE", table_name, post)
+                sql = '%s WHERE postID = %d' % \
+                      (update_clause, post['postID'])
+            else:
+                insert_clause = dict_to_sql("INSERT", table_name, post)
+                sql = insert_clause
 
             print(sql)
             cursor.execute(sql)
@@ -290,6 +361,41 @@ def post_handler(event, context):
             }
             pass
     return generate_success_response(data)
+
+
+def dict_to_sql(sql_op, table_name, data):
+    sql_set = ""
+    sql_insert_into = ""
+    sql_insert_value = ""
+    for index, row in enumerate(data):
+
+        sql_column = row
+        if isinstance(data[row], (int, bool)):
+            sql_column_value = str(data[row])
+        else:
+            sql_column_value = '\'%s\'' % (data[row])
+
+        if sql_op == 'UPDATE':
+            sql_set_chunk = sql_column + ' = ' + sql_column_value
+            if index != 0:
+                sql_set_chunk = ", " + sql_set_chunk
+            sql_set += sql_set_chunk
+
+        elif sql_op == 'INSERT' or sql_op == 'SELECT':
+            if index != 0:
+                sql_column = ',' + sql_column
+                sql_column_value = ',' + sql_column_value
+            sql_insert_into += sql_column
+            sql_insert_value += sql_column_value
+
+    if sql_op == 'UPDATE':
+        sql = 'UPDATE %s SET %s' % (table_name, sql_set)
+    elif sql_op == 'INSERT':
+        sql = 'INSERT INTO %s (%s) VALUES (%s)' % (table_name, sql_insert_into, sql_insert_value)
+    elif sql_op == 'SELECT':
+        sql = 'SELECT %s FROM %s' % (sql_insert_into, table_name)
+
+    return sql
 
 
 def handler(event, context):
