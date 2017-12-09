@@ -144,7 +144,8 @@ def group_handler(event, context):
                 GroupName=group_name
             )
             # push notification
-            push_notification(user_name, group_name, "User added", "User " + user_name +" has been added to group" + group_name)
+            push_notification(user_name, group_name, "User added", "User %s has been added to group %s" %
+                              (user_name, group_name))
         elif operation == 'create':
             boto_cognito_client.create_group(
                 GroupName=group_name,
