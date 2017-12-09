@@ -4,6 +4,7 @@ import pymysql
 import logging
 import rds_config
 import aws_config
+import botocore
 import boto3
 import collections
 import time
@@ -19,22 +20,21 @@ cursor = None
 
 # Create a sql database connection
 def init_db_connection():
-    host_name = rds_config.host_name
-    db_username = rds_config.db_username
-    db_password = rds_config.db_password
-    db_name = rds_config.db_name
     try:
         global cnx
         global cursor
-        cnx = pymysql.connect(host=host_name, user=db_username, password=db_password,
-                              db=db_name, autocommit=True)
+        cnx = pymysql.connect(
+            host=rds_config.host_name,
+            user=rds_config.db_username,
+            password=rds_config.db_password,
+            db=rds_config.db_name,
+            autocommit=True
+        )
         cursor = cnx.cursor()
-        print("db connection established")
+        # print("db connection established")
         return
-    except:
-        return generate_error_response(500,
-                                       "Database connection failed, please try again"
-                                       "Database connection failed")
+    except pymysql.err.Error as e:
+        return generate_error_response(500, e.args)
 
 
 def init_boto3_client():
@@ -67,7 +67,8 @@ def boto_admin_list_groups_for_user(user_name):
         Limit=60
     )
 
-# query string to dictionary
+
+# query string to dictionary, used because AWS SDK sometimes put query string into body (bug?)
 def qs_to_dict(qs):
     final_dict = dict()
     for item in qs.split("&"):
@@ -75,17 +76,32 @@ def qs_to_dict(qs):
     return final_dict
 
 
+# Return None if not in any group
+def boto_get_group_of_a_user(user_name):
+    response = boto_cognito_client.admin_list_groups_for_user(
+        Username=user_name,
+        UserPoolId=aws_config.UserPoolId,
+        Limit=60
+    )
+    if len(response['Groups']) == 1:
+        return response['Groups'][0]['GroupName']
+    elif len(response['Groups']) == 0:
+        return None
+    else:
+        raise Exception("User %s in more than one group!" % user_name)
+
+
+# /group + POST / GET
 def group_handler(event, context):
-    table_name = 'Groups'
     init_boto3_client()
 
     query_string_parameters = event["queryStringParameters"]
     if query_string_parameters is None:
         if event['body'] is not None:
-            print("SDK just fucked up again")
+            # print("SDK just fucked up again")
             query_string_parameters = qs_to_dict(event['body'])
         else:
-            return generate_error_response(404, 'Missing query_string_parameters')
+            return generate_error_response(404, 'Missing query_string_parameters (it is null)')
     if 'operation' not in query_string_parameters:
         return generate_error_response(400, 'Missing \'operation\' key in query_string')
     operation = query_string_parameters['operation']
@@ -95,66 +111,84 @@ def group_handler(event, context):
     user_name = query_string_parameters['userName']
 
     if event['httpMethod'] == "GET":
-
+        # This function always returns a list of strings
         if operation == 'listMembers':
-            response = boto_admin_list_groups_for_user(user_name)
-            if len(response['Groups']) != 0:
-                group_name = response['Groups'][0]['GroupName']
+            try:
+                group_name = boto_get_group_of_a_user(user_name)
+                if group_name is None:
+                    return generate_error_response(400, "User: %s is not in any group" % user_name)
                 response = boto_cognito_client.list_users_in_group(
                     UserPoolId=aws_config.UserPoolId,
                     GroupName=group_name,
                     Limit=60
                 )
                 return_list = [user['Username'] for user in response['Users']]
-            else:
-                return_list = []
-            return generate_success_response(json.dumps(return_list))
+                return generate_success_response(json.dumps(return_list))
+            except Exception as e:
+                # User in multiple groups
+                return generate_error_response(400, e.args)
+
         elif operation == 'getGroupName':
-            response = boto_admin_list_groups_for_user(user_name)
-            if len(response['Groups']) != 0:
-                group_name = response['Groups'][0]['GroupName']
-            else:
-                group_name = None
-            data = [group_name]
-            return generate_success_response(json.dumps(data))
+            try:
+                group_name = boto_get_group_of_a_user(user_name);
+                return generate_success_response(json.dumps([group_name]))
+            except Exception as e:
+                # User in multiple groups
+                return generate_error_response(400, e.args)
+
         else:
             return generate_error_response(404, "Not supported operation: " + operation)
+
     elif event['httpMethod'] == "POST":
-        # Now we have the client
 
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
 
+        # add a user into existing group
         if operation == 'add':
-            # first check if user is already in a group
-            response = boto_admin_list_groups_for_user(user_name)['Groups']
-            for group in response:
-                # user in a group already
-                group_name = group['GroupName']
-                boto_cognito_client.admin_remove_user_from_group(
-                    UserPoolId=aws_config.UserPoolId,
-                    Username=user_name,
-                    GroupName=group_name
+            # First check if group Name and UserName are valid.
+            try:
+                response = boto_cognito_client.get_group(
+                    GroupName=group_name,
+                    UserPoolId=aws_config.UserPoolId
                 )
+                response = boto_cognito_client.admin_get_user(
+                    UserPoolId=aws_config.UserPoolId,
+                    Username=user_name
+                    )
+            except botocore.errorfactory.ResourceNotFoundException as e:
+                return generate_error_response(404, "Group '%s' does not exist!" % group_name)
+            except botocore.errorfactory.UserNotFoundException as e:
+                return generate_error_response(404, "User '%s' does not exist!" % user_name)
 
-                boto_cognito_client.admin_add_user_to_group(
-                UserPoolId=aws_config.UserPoolId,
-                Username=user_name,
-                GroupName=group_name
-            )
+            # Then check if user is already in a group & remove user from that group
+            boto_add_user_to_only_one_group(user_name, group_name)
+
             # push notification
             push_notification(user_name, group_name, "User added", "User %s has been added to group %s" %
                               (user_name, group_name))
-        elif operation == 'create':
-            boto_cognito_client.create_group(
-                GroupName=group_name,
-                UserPoolId=aws_config.UserPoolId
-            )
-            # Then add user to the group
-            boto_add_user_to_only_one_group(user_name, group_name)
 
-        return generate_success_response(json.dumps({"result": "success"}))
+        # Create new group and add username to that group
+        elif operation == 'create':
+            # First check is group already exists
+            try:
+                response = boto_cognito_client.get_group(
+                    GroupName=group_name,
+                    UserPoolId=aws_config.UserPoolId
+                )
+            except botocore.errorfactory.ResourceNotFoundException as e:
+                boto_cognito_client.create_group(
+                    GroupName=group_name,
+                    UserPoolId=aws_config.UserPoolId
+                )
+                # Then add user to the group
+                boto_add_user_to_only_one_group(user_name, group_name)
+                return generate_success_response(json.dumps({"result": "success"}))
+
+            else:
+                # Group existed
+                return generate_error_response(400, "Group %s already exists" % group_name)
 
 
 def push_notification (user_name, group_name, push_title, push_body):
@@ -162,12 +196,13 @@ def push_notification (user_name, group_name, push_title, push_body):
     response = boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
         WriteCampaignRequest={
-            'Description': 'Campaign created by backend lambda',
+            'Description': 'Campaign created by lambda function',
             'IsPaused': False,
             'MessageConfiguration': {
                 'GCMMessage': {
                     'Action': 'OPEN_APP',
                     'Body': push_body,
+                    'JsonBody': json.dumps({"userName": user_name, "groupName":  group_name}),
                     'SilentPush': False,
                     'Title': push_title,
                 }
@@ -178,12 +213,13 @@ def push_notification (user_name, group_name, push_title, push_body):
                 'IsLocalTime': False,
                 'StartTime': current_time
             },
-            'SegmentId': 'a1a378598b1346c0bb199874181ff542',
-            'SegmentVersion': 1
+            'SegmentId': aws_config.pinpoint_allUsers_SegmentId,
+            'SegmentVersion': aws_config.pinpoint_allUsers_SegmentVersion
         }
     )
 
 
+# Assume user_name and group_name are both valid
 def boto_add_user_to_only_one_group(user_name, group_name):
     # first check if user is already in a group
     response = boto_admin_list_groups_for_user(user_name)['Groups']
@@ -197,7 +233,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
         )
         print("user " + user_name + " removed from group: " + group_name)
 
-        boto_cognito_client.admin_add_user_to_group(
+    boto_cognito_client.admin_add_user_to_group(
         UserPoolId=aws_config.UserPoolId,
         Username=user_name,
         GroupName=group_name

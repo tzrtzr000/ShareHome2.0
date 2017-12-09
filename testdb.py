@@ -120,15 +120,26 @@ def push_notification (user_name, group_name, push_title, push_body):
 
 
 def init_boto3_client():
-    global boto_cognito_client
-    global boto_pinpoint_client
+    global boto_cognito_client, boto_pinpoint_client
+    boto_cognito_client = boto3.client(
+        'cognito-idp',
+        aws_access_key_id=aws_config.aws_access_key_id,
+        aws_secret_access_key=aws_config.aws_secret_access_key,
+        region_name=aws_config.region
 
-    boto_pinpoint_client = boto3.client('pinpoint',
-                                        region_name=aws_config.region,
-                                        aws_access_key_id=aws_config.aws_access_key_id,
-                                        aws_secret_access_key=aws_config.aws_secret_access_key
-                                        )
+    )
+    boto_pinpoint_client = boto3.client(
+        'pinpoint',
+        region_name=aws_config.region,
+        aws_access_key_id=aws_config.aws_access_key_id,
+        aws_secret_access_key=aws_config.aws_secret_access_key
+    )
     return
 
 init_boto3_client()
 push_notification("s", "s", "fyfsb", "fyfsb2")
+
+response = boto_cognito_client.admin_get_user(
+    UserPoolId=aws_config.UserPoolId,
+    Username='sdfsdafsadfsdf'
+)
