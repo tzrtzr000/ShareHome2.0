@@ -4,7 +4,6 @@ import pymysql
 import logging
 import rds_config
 import aws_config
-import botocore
 import boto3
 import collections
 import time
@@ -53,11 +52,25 @@ def init_boto3_client():
     return
 
 
+def generate_success_response(data):
+    close_db_connection()
+    logger.info("Run success, return data:")
+    logger.info(data)
+    return {
+        'statusCode': 200,
+        'body': data,
+        'headers': {'Content-Type': 'application/json'}
+    }
+
+
 def generate_error_response(error_code, body):
-    return {'statusCode': error_code,
-            'body': body,
-            'headers': {'Content-Type': 'application/json'}
-            }
+    close_db_connection()
+    logger.error(str(error_code) + body)
+    return {
+        'statusCode': error_code,
+        'body': json.dumps({"result": body}),
+        'headers': {'Content-Type': 'application/json'}
+    }
 
 
 def boto_admin_list_groups_for_user(user_name):
@@ -101,7 +114,7 @@ def group_handler(event, context):
             # print("SDK just fucked up again")
             query_string_parameters = qs_to_dict(event['body'])
         else:
-            return generate_error_response(404, 'Missing query_string_parameters (it is null)')
+            return generate_error_response(400, 'Missing query_string_parameters (it is null)')
     if 'operation' not in query_string_parameters:
         return generate_error_response(400, 'Missing \'operation\' key in query_string')
     operation = query_string_parameters['operation']
@@ -137,7 +150,7 @@ def group_handler(event, context):
                 return generate_error_response(400, e.args)
 
         else:
-            return generate_error_response(404, "Not supported operation: " + operation)
+            return generate_error_response(400, "Not supported operation: " + operation)
 
     elif event['httpMethod'] == "POST":
 
@@ -157,10 +170,10 @@ def group_handler(event, context):
                     UserPoolId=aws_config.UserPoolId,
                     Username=user_name
                     )
-            except botocore.errorfactory.ResourceNotFoundException as e:
-                return generate_error_response(404, "Group '%s' does not exist!" % group_name)
-            except botocore.errorfactory.UserNotFoundException as e:
-                return generate_error_response(404, "User '%s' does not exist!" % user_name)
+            except boto_cognito_client.exceptions.ResourceNotFoundException as e:
+                return generate_error_response(400, "Group '%s' does not exist!" % group_name)
+            except boto_cognito_client.exceptions.UserNotFoundException as e:
+                return generate_error_response(400, "User '%s' does not exist!" % user_name)
 
             # Then check if user is already in a group & remove user from that group
             boto_add_user_to_only_one_group(user_name, group_name)
@@ -168,6 +181,7 @@ def group_handler(event, context):
             # push notification
             push_notification(user_name, group_name, "User added", "User %s has been added to group %s" %
                               (user_name, group_name))
+            return generate_success_response(generate_result_response("Updated"))
 
         # Create new group and add username to that group
         elif operation == 'create':
@@ -177,7 +191,7 @@ def group_handler(event, context):
                     GroupName=group_name,
                     UserPoolId=aws_config.UserPoolId
                 )
-            except botocore.errorfactory.ResourceNotFoundException as e:
+            except boto_cognito_client.exceptions.ResourceNotFoundException as e:
                 boto_cognito_client.create_group(
                     GroupName=group_name,
                     UserPoolId=aws_config.UserPoolId
@@ -191,9 +205,31 @@ def group_handler(event, context):
                 return generate_error_response(400, "Group %s already exists" % group_name)
 
 
-def push_notification (user_name, group_name, push_title, push_body):
+# Assume user_name and group_name are both valid
+def boto_add_user_to_only_one_group(user_name, group_name):
+    # first check if user is already in a group
+    response = boto_admin_list_groups_for_user(user_name)['Groups']
+    for group in response:
+        # user in a group already
+        old_group_name = group['GroupName']
+        boto_cognito_client.admin_remove_user_from_group(
+            UserPoolId=aws_config.UserPoolId,
+            Username=user_name,
+            GroupName=old_group_name
+        )
+        print("User " + user_name + " removed from group: " + group_name)
+
+    boto_cognito_client.admin_add_user_to_group(
+        UserPoolId=aws_config.UserPoolId,
+        Username=user_name,
+        GroupName=group_name
+    )
+    print("User " + user_name + " added into group: " + group_name)
+
+
+def push_notification(user_name, group_name, push_title, push_body):
     current_time = strftime('%Y-%m-%dT%H:%M:%S', gmtime())
-    response = boto_pinpoint_client.create_campaign(
+    boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
         WriteCampaignRequest={
             'Description': 'Campaign created by lambda function',
@@ -219,32 +255,20 @@ def push_notification (user_name, group_name, push_title, push_body):
     )
 
 
-# Assume user_name and group_name are both valid
-def boto_add_user_to_only_one_group(user_name, group_name):
-    # first check if user is already in a group
-    response = boto_admin_list_groups_for_user(user_name)['Groups']
-    for group in response:
-        # user in a group already
-        old_group_name = group['GroupName']
-        boto_cognito_client.admin_remove_user_from_group(
-            UserPoolId=aws_config.UserPoolId,
-            Username=user_name,
-            GroupName=old_group_name
-        )
-        print("user " + user_name + " removed from group: " + group_name)
-
-    boto_cognito_client.admin_add_user_to_group(
-        UserPoolId=aws_config.UserPoolId,
-        Username=user_name,
-        GroupName=group_name
-    )
-
-
 def task_handler(event, context):
     init_db_connection()
 
     table_name = 'Tasks'
-
+    sample_task = {
+        "groupName": "sample_task_group",
+        "taskTitle": "sample_task_title",
+        "taskContent": "sample_task_content",
+        "taskDuration": 60,
+        "taskUser": "userID,userID2,userID3",
+        "taskSolved": False,
+        "taskID": 15,
+        "lastRotated": "dateString"
+    }
     query_string_parameters = event["queryStringParameters"]
     if query_string_parameters is None:
         return generate_error_response(400, 'Missing query_string_parameters')
@@ -253,14 +277,15 @@ def task_handler(event, context):
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
+        sql_clause = generate_sql_clause("SELECT", table_name, sample_task)
+        sql = '%s WHERE groupName = \'%s\'' % (
+            sql_clause, group_name)
 
-        sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, taskID, lastRotated FROM %s WHERE groupName =\'%s\'' % (
-            table_name, group_name)
-        cursor.execute(sql)
-        rows = cursor.fetchall()
+        rows = execute_sql(sql)
+
         row_array_list = []
         for row in rows:
-            d = collections.OrderedDict()
+            d = []
             d['groupName'] = row[0]
             d['taskTitle'] = row[1]
             d['taskContent'] = row[2]
@@ -268,10 +293,16 @@ def task_handler(event, context):
             d['taskUser'] = row[4]
             d['taskSolved'] = True if row[5] else False
             d['taskID'] = row[6]
-            d['lastRotated'] = row[7].strftime('%Y-%m-%d %H:%M:%S')
+            if row[7] is None:
+                d['lastRotated'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                logger.error("USE CURRENT TIME as lastRotated")
+            else:
+                d['lastRotated'] = row[7].strftime('%Y-%m-%d %H:%M:%S')
             row_array_list.append(d)
 
         data = json.dumps(row_array_list)
+        return generate_success_response(data)
+
     elif event['httpMethod'] == "POST":
         if 'operation' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'operation\' key in request body')
@@ -280,29 +311,43 @@ def task_handler(event, context):
         task = json.loads(event['body'])
 
         if operation == 'add':
-            insert_time = time.strftime('%Y-%m-%d %H:%M:%S')
-            sql = 'INSERT INTO %s (groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, lastRotated) ' \
-                  'VALUES (\'%s\',\'%s\',\'%s\',%s,null,%s, \'%s\')' % (
-                      table_name, task['groupName'], task['taskTitle'], task['taskContent'], task['taskDuration'],
-                      task['taskSolved'], insert_time)
+            if 'taskID' in task:
+                # we want to update
+                update_clause = generate_sql_clause("UPDATE", table_name, task)
+                sql = '%s WHERE taskID = %d' % \
+                      (update_clause, task['taskID'])
+                data = generate_result_response("Add task '%s' success" % task['taskTitle'])
+            else:
+                sql = generate_sql_clause("INSERT", table_name, task)
+                data = generate_result_response("Task '%s' updated" % task['taskTitle'])
 
-            print(sql)
-            cursor.execute(sql)
-            rows = cursor.fetchall()
+            execute_sql(sql)
+        else:
+            return generate_error_response(400, "Unsupported operation: " + operation)
 
-            sql = 'SELECT taskID from %s where groupName = \'%s\' and lastRotated = \'%s\'' % (
-                table_name, task['groupName'], insert_time)
-            cursor.execute(sql)
-            rows = cursor.fetchall()
+        return generate_success_response(data)
 
-            data = json.dumps({"taskID": rows[0][0]})
+    else:
+        return generate_error_response(400, "Unsupported httpMethod: " + event['httpMethod'])
 
-        if operation == 'removeTask':
-            data = {
-                'unknown': 'unknown'
-            }
-            pass
-    return generate_success_response(data)
+
+def execute_sql(sql):
+    try:
+        print(sql)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        return rows
+    except pymysql.Error as e:
+        logger.error(e)
+        raise e
+
+
+def generate_result_response(result):
+    return json.dumps(
+        {
+            "result": result
+        }
+    )
 
 
 def post_handler(event, context):
@@ -321,16 +366,15 @@ def post_handler(event, context):
     if query_string_parameters is None:
         return generate_error_response(400, 'Missing query_string_parameters')
 
-    #
     if event['httpMethod'] == "GET":
         if 'groupName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
 
-        select_cause = dict_to_sql("SELECT", table_name, post_sample)
+        select_cause = generate_sql_clause("SELECT", table_name, post_sample)
         sql = '%s WHERE groupName =\'%s\'' % (select_cause, group_name)
-        cursor.execute(sql)
-        rows = cursor.fetchall()
+        rows = execute_sql(sql)
+
         row_array_list = []
         for row in rows:
             d = collections.OrderedDict()
@@ -341,6 +385,8 @@ def post_handler(event, context):
             d['postID'] = row[4]
             row_array_list.append(d)
         data = json.dumps(row_array_list)
+        return generate_success_response(data)
+
     elif event['httpMethod'] == "POST":
         if 'operation' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'operation\' key in request body')
@@ -351,33 +397,25 @@ def post_handler(event, context):
         if operation == 'add':
             if 'postID' in post:
                 # we want to update
-                update_clause = dict_to_sql("UPDATE", table_name, post)
+                update_clause = generate_sql_clause("UPDATE", table_name, post)
                 sql = '%s WHERE postID = %d' % \
                       (update_clause, post['postID'])
             else:
-                insert_clause = dict_to_sql("INSERT", table_name, post)
-                sql = insert_clause
+                sql = generate_sql_clause("INSERT", table_name, post)
 
-            print(sql)
-            cursor.execute(sql)
-            rows = cursor.fetchall()
+            execute_sql(sql)
 
-            sql = 'SELECT postID from %s where groupName = \'%s\' and postTitle = \'%s\'' % (
-                table_name, post['groupName'], post['postTitle'])
-            cursor.execute(sql)
-            rows = cursor.fetchall()
+            data = generate_result_response("Add post '%s' success" % post['postTitle'])
 
-            data = json.dumps({"result": rows[0][0]})
+        else:
+            return generate_error_response(400, "Unsupported operation: " + operation)
+        return generate_success_response(data)
 
-        if operation == 'removeTask':
-            data = {
-                'unknown': 'unknown'
-            }
-            pass
-    return generate_success_response(data)
+    else:
+        return generate_error_response(400, "Unsupported httpMethod: " + event['httpMethod'])
 
 
-def dict_to_sql(sql_op, table_name, data):
+def generate_sql_clause(sql_op, table_name, data):
     sql_set = ""
     sql_insert_into = ""
     sql_insert_value = ""
@@ -408,14 +446,13 @@ def dict_to_sql(sql_op, table_name, data):
         sql = 'INSERT INTO %s (%s) VALUES (%s)' % (table_name, sql_insert_into, sql_insert_value)
     elif sql_op == 'SELECT':
         sql = 'SELECT %s FROM %s' % (sql_insert_into, table_name)
-
+    else:
+        raise Exception("Unsupported sql operation in generate_sql_clause")
     return sql
 
 
 def handler(event, context):
     print(json.dumps(event, sort_keys=True))
-    print(context)
-
     resource_path = event['path']
 
     if resource_path == '/group':
@@ -424,18 +461,13 @@ def handler(event, context):
         return task_handler(event, context)
     elif resource_path == '/post':
         return post_handler(event, context)
-    return generate_error_response(404, 'Unsupported path: ' + resource_path)
+    return generate_error_response(400, 'Unsupported path: ' + resource_path)
 
 
-def generate_success_response(data):
+def close_db_connection():
     global cnx
     if cnx is not None:
         cursor.close()
         cnx.close()
         cnx = None
-
-    return {
-        'statusCode': 200,
-        'body': data,
-        'headers': {'Content-Type': 'application/json'}
-    }
+    return
