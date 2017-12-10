@@ -217,7 +217,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
             Username=user_name,
             GroupName=old_group_name
         )
-        print("User " + user_name + " removed from group: " + group_name)
+        print("User " + user_name + " removed from group: " + old_group_name)
 
     boto_cognito_client.admin_add_user_to_group(
         UserPoolId=aws_config.UserPoolId,
@@ -228,6 +228,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
 
 
 def push_notification(user_name, group_name, push_title, push_body):
+    new_segment = create_pinpoint_segment(user_name, group_name)
     current_time = strftime('%Y-%m-%dT%H:%M:%S', gmtime())
     boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
@@ -243,16 +244,46 @@ def push_notification(user_name, group_name, push_title, push_body):
                     'Title': push_title,
                 }
             },
-            'Name': 'Lambda Campaign',
+            'Name': group_name + current_time,
             'Schedule': {
                 'Frequency': 'ONCE',
                 'IsLocalTime': False,
                 'StartTime': current_time
             },
-            'SegmentId': aws_config.pinpoint_allUsers_SegmentId,
-            'SegmentVersion': aws_config.pinpoint_allUsers_SegmentVersion
+            'SegmentId': new_segment['Id'],
+            'SegmentVersion': new_segment['Version']
         }
     )
+
+
+def create_pinpoint_segment(user_name, group_name):
+    logger.exception(group_name)
+    response = boto_pinpoint_client.create_segment(
+        ApplicationId=aws_config.pinpoint_application_id,
+        WriteSegmentRequest={
+            'Dimensions': {
+                'Attributes': {
+                    'GroupName': {
+                        'AttributeType': 'INCLUSIVE',
+                        'Values': [
+                            group_name,
+                        ]
+                    }
+                },
+                'Behavior': {
+                    'Recency': {
+                        'Duration': 'DAY_30',
+                        'RecencyType': 'ACTIVE'
+                    }
+                }
+            },
+            'Name': group_name
+        }
+    )
+    return {
+        'Id': response['SegmentResponse']['Id'],
+        'Version': response['SegmentResponse']['Version']
+    }
 
 
 def task_handler(event, context):
