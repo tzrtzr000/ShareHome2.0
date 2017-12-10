@@ -129,7 +129,7 @@ def group_handler(event, context):
             try:
                 group_name = boto_get_group_of_a_user(user_name)
                 if group_name is None:
-                    return generate_error_response(400, "User: %s is not in any group" % user_name)
+                    return generate_error_response(400, "User: %s is not in any group!" % user_name)
                 response = boto_cognito_client.list_users_in_group(
                     UserPoolId=aws_config.UserPoolId,
                     GroupName=group_name,
@@ -179,7 +179,7 @@ def group_handler(event, context):
             boto_add_user_to_only_one_group(user_name, group_name)
 
             # push notification
-            push_notification(user_name, group_name, "User added", "User %s has been added to group %s" %
+            push_notification(user_name, group_name, "User added", "User '%s' has been added to group %s" %
                               (user_name, group_name))
             return generate_success_response(generate_result_response("Updated"))
 
@@ -202,7 +202,7 @@ def group_handler(event, context):
 
             else:
                 # Group existed
-                return generate_error_response(400, "Group %s already exists" % group_name)
+                return generate_error_response(400, "Group '%s' already exists!" % group_name)
 
 
 # Assume user_name and group_name are both valid
