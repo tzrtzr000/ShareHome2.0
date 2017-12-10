@@ -1,80 +1,55 @@
 from __future__ import print_function
 
 import os
+import library
+import index
 from datetime import datetime, timedelta
-import pymysql
-import rds_config
-import collections
-import logging
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-
-def init_db_connection():
-    try:
-        global cnx
-        global cursor
-        cnx = pymysql.connect(
-            host=rds_config.host_name,
-            user=rds_config.db_username,
-            password=rds_config.db_password,
-            db=rds_config.db_name,
-            autocommit=True
-        )
-        cursor = cnx.cursor()
-        # print("db connection established")
-        return
-    except pymysql.err.Error as e:
-        return generate_error_response(500, e.args)
-
-
-def generate_success_response(data):
-    close_db_connection()
-    logger.info("Run success, return data:")
-    logger.info(data)
-
-
-def generate_error_response(error_code, body):
-    close_db_connection()
-    logger.error(str(error_code) + body)
-
-
-def close_db_connection():
-    global cnx
-    if cnx is not None:
-        cursor.close()
-        cnx.close()
-        cnx = None
-    return
-
-
-def validate(res):
-    pass
+from collections import deque
 
 
 def lambda_handler(event, context):
-    init_db_connection()
+    library.init()
+    index.init_db_connection()
+
     table_name = 'Tasks'
 
-    sql = 'SELECT groupName, taskTitle, taskContent, taskDuration, taskUser, taskSolved, lastRotated FROM %s' % (
-        table_name)
-    cursor.execute(sql)
-    rows = cursor.fetchall()
-    row_array_list = []
-    for row in rows:
-        d = collections.OrderedDict()
-        d['groupName'] = row[0]
-        d['taskTitle'] = row[1]
-        d['taskContent'] = row[2]
-        d['taskDuration'] = row[3]
-        d['taskUser'] = row[4]
-        d['taskSolved'] = True if row[5] else False
-        d['lastRotated'] = row[6]
-        print(d['lastRotated'])
-        # if d['lastRotated'] + d['taskDuration'] <
-        lastTime_object = datetime.strftime(row[6]) + timedelta(minutes=row[3])
-        print(lastTime_object)
+    timeFormat =  "%Y-%m-%dT%H:%M:%S"
+    sql = 'SELECT taskDuration, taskUser, taskID, lastRotated, taskTitle ' \
+          'FROM %s ' \
+          'WHERE taskSolved = FALSE' % (
+            table_name)
 
-        row_array_list.append(d)
-    cnx.close()
+    rows = index.execute_sql(sql)
+
+    for row in rows:
+        d = {}
+        d['taskUser'] = row[1]
+        d['lastRotated'] = row[3]
+        # print("old:" + str(d['lastRotated']))
+        # if d['lastRotated'] + d['taskDuration'] <
+        d['lastRotated'] = row[3] + timedelta(minutes=row[0])
+        # print("new: " + str(d['lastRotated']))
+
+        if (datetime.now() - d['lastRotated']).total_seconds() > 0:
+            new_order = rotate_user(d['taskUser'])
+            d['taskUser'] = new_order[0]
+            sql = index.generate_sql_clause("UPDATE", table_name, d)
+            sql += " WHERE taskID = %s" % row[2]
+            index.execute_sql(sql)
+
+            # send notification to user
+            user_name = new_order[1]
+
+    index.close_db_connection()
+
+
+def rotate_user(user):
+    if user is None:
+        return None
+    else:
+        user_list = user.split(",")
+        user_list = deque(user_list)
+        user_list.rotate(-1)
+        result = ','.join(user_list)
+        return [result, user_list[0]]
+

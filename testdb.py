@@ -8,6 +8,7 @@ import boto3
 import collections
 import index
 from time import gmtime, strftime
+from collections import deque
 
 
 logger = logging.getLogger()
@@ -139,7 +140,17 @@ def init_boto3_client():
 init_boto3_client()
 push_notification("s", "s", "fyfsb", "fyfsb2")
 
-response = boto_cognito_client.admin_get_user(
-    UserPoolId=aws_config.UserPoolId,
-    Username='sdfsdafsadfsdf'
-)
+
+def rotateUser (user):
+    if user is None:
+        return None
+    else:
+        list = user.split(",")
+        list = deque(list)
+        list.rotate(-1)
+        result = ','.join(list)
+        return result
+
+
+print(rotateUser('a,b,c'))
+

@@ -8,28 +8,23 @@ import boto3
 import collections
 import time
 from time import gmtime, strftime
-
+import library
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-cnx = None
-cursor = None
 
 
 # Create a sql database connection
 def init_db_connection():
     try:
-        global cnx
-        global cursor
-        cnx = pymysql.connect(
+        library.cnx = pymysql.connect(
             host=rds_config.host_name,
             user=rds_config.db_username,
             password=rds_config.db_password,
             db=rds_config.db_name,
             autocommit=True
         )
-        cursor = cnx.cursor()
+        library.cursor = library.cnx.cursor()
         # print("db connection established")
         return
     except pymysql.err.Error as e:
@@ -228,7 +223,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
 
 
 def push_notification(user_name, group_name, push_title, push_body):
-    new_segment = create_pinpoint_segment(user_name, group_name)
+    new_segment = create_pinpoint_segment(None, group_name)
     current_time = strftime('%Y-%m-%dT%H:%M:%S', gmtime())
     boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
@@ -263,10 +258,10 @@ def create_pinpoint_segment(user_name, group_name):
         WriteSegmentRequest={
             'Dimensions': {
                 'Attributes': {
-                    'GroupName': {
+                    'UserName' if user_name is not None else 'GroupName': {
                         'AttributeType': 'INCLUSIVE',
                         'Values': [
-                            group_name,
+                            user_name if user_name is not None else group_name,
                         ]
                     }
                 },
@@ -316,7 +311,7 @@ def task_handler(event, context):
 
         row_array_list = []
         for row in rows:
-            d = []
+            d = {}
             d['groupName'] = row[0]
             d['taskTitle'] = row[1]
             d['taskContent'] = row[2]
@@ -365,8 +360,8 @@ def task_handler(event, context):
 def execute_sql(sql):
     try:
         print(sql)
-        cursor.execute(sql)
-        rows = cursor.fetchall()
+        library.cursor.execute(sql)
+        rows = library.cursor.fetchall()
         return rows
     except pymysql.Error as e:
         logger.error(e)
@@ -408,7 +403,7 @@ def post_handler(event, context):
 
         row_array_list = []
         for row in rows:
-            d = collections.OrderedDict()
+            d = {}
             d['groupName'] = row[0]
             d['postTitle'] = row[1]
             d['postContent'] = row[2]
@@ -484,6 +479,7 @@ def generate_sql_clause(sql_op, table_name, data):
 
 def handler(event, context):
     print(json.dumps(event, sort_keys=True))
+    library.init()
     resource_path = event['path']
 
     if resource_path == '/group':
@@ -496,9 +492,8 @@ def handler(event, context):
 
 
 def close_db_connection():
-    global cnx
-    if cnx is not None:
-        cursor.close()
-        cnx.close()
-        cnx = None
+    if library.cnx is not None:
+        library.cursor.close()
+        library.cnx.close()
+        library.cnx = None
     return
