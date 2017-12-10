@@ -1,11 +1,9 @@
 import json
-import datetime
 import pymysql
 import logging
 import rds_config
 import aws_config
 import boto3
-import collections
 import time
 from time import gmtime, strftime
 import library
@@ -138,7 +136,7 @@ def group_handler(event, context):
 
         elif operation == 'getGroupName':
             try:
-                group_name = boto_get_group_of_a_user(user_name);
+                group_name = boto_get_group_of_a_user(user_name)
                 return generate_success_response(json.dumps([group_name]))
             except Exception as e:
                 # User in multiple groups
@@ -157,17 +155,17 @@ def group_handler(event, context):
         if operation == 'add':
             # First check if group Name and UserName are valid.
             try:
-                response = boto_cognito_client.get_group(
+                boto_cognito_client.get_group(
                     GroupName=group_name,
                     UserPoolId=aws_config.UserPoolId
                 )
-                response = boto_cognito_client.admin_get_user(
+                boto_cognito_client.admin_get_user(
                     UserPoolId=aws_config.UserPoolId,
                     Username=user_name
                     )
-            except boto_cognito_client.exceptions.ResourceNotFoundException as e:
+            except boto_cognito_client.exceptions.ResourceNotFoundException:
                 return generate_error_response(400, "Group '%s' does not exist!" % group_name)
-            except boto_cognito_client.exceptions.UserNotFoundException as e:
+            except boto_cognito_client.exceptions.UserNotFoundException:
                 return generate_error_response(400, "User '%s' does not exist!" % user_name)
 
             # Then check if user is already in a group & remove user from that group
@@ -178,24 +176,26 @@ def group_handler(event, context):
             create_campaign(new_segment, group_name + ":" + user_name,
                             "User added", "User '%s' has been added to group %s" %
                             (user_name, group_name))
-            return generate_success_response(generate_result_response("Updated"))
+            return generate_success_response(generate_result_response("User '%s' has been added to group %s" %
+                                                                      (user_name, group_name)))
 
         # Create new group and add username to that group
         elif operation == 'create':
             # First check is group already exists
             try:
-                response = boto_cognito_client.get_group(
+                boto_cognito_client.get_group(
                     GroupName=group_name,
                     UserPoolId=aws_config.UserPoolId
                 )
-            except boto_cognito_client.exceptions.ResourceNotFoundException as e:
+            except boto_cognito_client.exceptions.ResourceNotFoundException:
                 boto_cognito_client.create_group(
                     GroupName=group_name,
                     UserPoolId=aws_config.UserPoolId
                 )
                 # Then add user to the group
                 boto_add_user_to_only_one_group(user_name, group_name)
-                return generate_success_response(json.dumps({"result": "success"}))
+                return generate_success_response(
+                    generate_result_response("Group '%s' created. You're the first member." % group_name))
 
             else:
                 # Group existed
@@ -308,7 +308,7 @@ def task_handler(event, context):
 
         row_array_list = []
         for row in rows:
-            d = {}
+            d = dict()
             d['groupName'] = row[0]
             d['taskTitle'] = row[1]
             d['taskContent'] = row[2]
@@ -401,7 +401,7 @@ def post_handler(event, context):
 
         row_array_list = []
         for row in rows:
-            d = {}
+            d = dict()
             d['groupName'] = row[0]
             d['postTitle'] = row[1]
             d['postContent'] = row[2]
