@@ -60,7 +60,7 @@ def generate_success_response(data):
 
 def generate_error_response(error_code, body):
     close_db_connection()
-    logger.error(str(error_code) + body)
+    logger.error("generate error response: " + str(error_code) + body)
     return {
         'statusCode': error_code,
         'body': json.dumps({"result": body}),
@@ -174,8 +174,10 @@ def group_handler(event, context):
             boto_add_user_to_only_one_group(user_name, group_name)
 
             # push notification
-            push_notification(user_name, group_name, "User added", "User '%s' has been added to group %s" %
-                              (user_name, group_name))
+            new_segment = create_pinpoint_segment(None, group_name)
+            create_campaign(new_segment, group_name + ":" + user_name,
+                            "User added", "User '%s' has been added to group %s" %
+                            (user_name, group_name))
             return generate_success_response(generate_result_response("Updated"))
 
         # Create new group and add username to that group
@@ -222,8 +224,7 @@ def boto_add_user_to_only_one_group(user_name, group_name):
     print("User " + user_name + " added into group: " + group_name)
 
 
-def push_notification(user_name, group_name, push_title, push_body):
-    new_segment = create_pinpoint_segment(None, group_name)
+def create_campaign(new_segment, campaign_name, push_title, push_body):
     current_time = strftime('%Y-%m-%dT%H:%M:%S', gmtime())
     boto_pinpoint_client.create_campaign(
         ApplicationId=aws_config.pinpoint_application_id,
@@ -234,12 +235,11 @@ def push_notification(user_name, group_name, push_title, push_body):
                 'GCMMessage': {
                     'Action': 'OPEN_APP',
                     'Body': push_body,
-                    'JsonBody': json.dumps({"userName": user_name, "groupName":  group_name}),
                     'SilentPush': False,
                     'Title': push_title,
                 }
             },
-            'Name': group_name + current_time,
+            'Name': campaign_name,
             'Schedule': {
                 'Frequency': 'ONCE',
                 'IsLocalTime': False,
@@ -252,7 +252,7 @@ def push_notification(user_name, group_name, push_title, push_body):
 
 
 def create_pinpoint_segment(user_name, group_name):
-    logger.exception(group_name)
+    logger.info("Create segment: userName: %s, groupName: %s" % (user_name, group_name))
     response = boto_pinpoint_client.create_segment(
         ApplicationId=aws_config.pinpoint_application_id,
         WriteSegmentRequest={
@@ -272,13 +272,10 @@ def create_pinpoint_segment(user_name, group_name):
                     }
                 }
             },
-            'Name': group_name
+            'Name': user_name if user_name is not None else group_name
         }
     )
-    return {
-        'Id': response['SegmentResponse']['Id'],
-        'Version': response['SegmentResponse']['Version']
-    }
+    return response['SegmentResponse']
 
 
 def task_handler(event, context):
@@ -364,6 +361,7 @@ def execute_sql(sql):
         rows = library.cursor.fetchall()
         return rows
     except pymysql.Error as e:
+        logger.error("SQL execution error: " + sql)
         logger.error(e)
         raise e
 

@@ -12,7 +12,7 @@ from collections import deque
 def lambda_handler(event, context):
     library.init()
     index.init_db_connection()
-
+    index.init_boto3_client()
     global boto_cognito_client
     boto_cognito_client = boto3.client(
         'cognito-idp',
@@ -52,12 +52,13 @@ def lambda_handler(event, context):
                 boto_cognito_client.admin_get_user(
                     UserPoolId=aws_config.UserPoolId,
                     Username=user_name
-                    )
+                )
             except boto_cognito_client.exceptions.UserNotFoundException as e:
                 pass
                 print("Invalid user: %s" % user_name)
             else:
-                index.push_notification(user_name, None, row[4], "It's your turn now")
+                new_segment = index.create_pinpoint_segment(user_name, None)
+                index.create_campaign(new_segment, user_name, row[4], "It's your turn now ^_^")
                 print("%s has been notified for %s" % (user_name, row[4]))
     index.close_db_connection()
 
