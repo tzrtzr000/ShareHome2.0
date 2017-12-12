@@ -478,7 +478,6 @@ def profile_handler(event, context):
         return generate_success_response(generate_result_response("success?"))
 
 
-
 def generate_sql_clause(sql_op, table_name, data):
     sql_set = ""
     sql_insert_into = ""
@@ -516,7 +515,7 @@ def generate_sql_clause(sql_op, table_name, data):
 
 
 def handler(event, context):
-    print(json.dumps(event, sort_keys=True))
+    # print(json.dumps(event, sort_keys=True))
     library.init()
     resource_path = event['path']
 
