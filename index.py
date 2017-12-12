@@ -439,6 +439,46 @@ def post_handler(event, context):
         return generate_error_response(400, "Unsupported httpMethod: " + event['httpMethod'])
 
 
+def profile_handler(event, context):
+    sample_profile = {
+        "result": "string"
+    }
+    init_db_connection()
+    table_name = 'Profiles'
+   
+    query_string_parameters = event["queryStringParameters"]
+    if query_string_parameters is None:
+        return generate_error_response(400, 'Missing query_string_parameters')
+
+    if event['httpMethod'] == "GET":
+        if 'userName' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'userName\' key in request body')
+        user_name = query_string_parameters['userName']
+
+        select_cause = generate_sql_clause("SELECT", table_name, sample_profile)
+        sql = '%s WHERE userName =\'%s\'' % (select_cause, user_name)
+        rows = execute_sql(sql)
+
+        result = {
+            "result": rows[0][0]
+        }
+
+        data = json.dumps(result)
+        return generate_success_response(data)
+
+    elif event['httpMethod'] == "POST":
+        if 'userName' not in query_string_parameters:
+            return generate_error_response(400, 'Missing \'userName\' key in request body')
+        user_name = query_string_parameters['userName']
+
+        profile = json.loads(event['body'])
+
+        sql_clasue = "INSERT INTO %s (userName, result) VALUES (\'%s\', \'%s\') " % (table_name, user_name, profile['result'])
+        execute_sql(sql_clasue)
+        return generate_success_response(generate_result_response("success?"))
+
+
+
 def generate_sql_clause(sql_op, table_name, data):
     sql_set = ""
     sql_insert_into = ""
@@ -486,6 +526,8 @@ def handler(event, context):
         return task_handler(event, context)
     elif resource_path == '/post':
         return post_handler(event, context)
+    elif resource_path == '/profile':
+        return profile_handler(event, context)
     return generate_error_response(400, 'Unsupported path: ' + resource_path)
 
 
