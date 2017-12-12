@@ -396,7 +396,7 @@ def post_handler(event, context):
         group_name = query_string_parameters['groupName']
 
         select_cause = generate_sql_clause("SELECT", table_name, post_sample)
-        sql = '%s WHERE groupName =\'%s\'' % (select_cause, group_name)
+        sql = '%s WHERE groupName =\'%s\' ORDER BY postUrgent desc' % (select_cause, group_name)
         rows = execute_sql(sql)
 
         row_array_list = []
