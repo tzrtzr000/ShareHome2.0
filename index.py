@@ -301,7 +301,7 @@ def task_handler(event, context):
             return generate_error_response(400, 'Missing \'groupName\' key in request body')
         group_name = query_string_parameters['groupName']
         sql_clause = generate_sql_clause("SELECT", table_name, sample_task)
-        sql = '%s WHERE groupName = \'%s\'' % (
+        sql = '%s WHERE groupName = \'%s\' AND taskSolved = False' % (
             sql_clause, group_name)
 
         rows = execute_sql(sql)
