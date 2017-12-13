@@ -343,7 +343,7 @@ def task_handler(event, context):
                         return generate_error_response(400, 'Missing \'userName\' key in query_string')
                     user_name = query_string_parameters['userName']
 
-                    sql = "SELECT solvedUser, taskTitle FROM %s WHERE taskID = %d" % (
+                    sql = "SELECT solvedUser, taskTitle, groupName FROM %s WHERE taskID = %d" % (
                         table_name, task['taskID'])
                     row = execute_sql(sql)
                     solvedUser = row[0][0]
@@ -351,6 +351,10 @@ def task_handler(event, context):
                     task['solvedUser'] = add_user_name_non_duplicate_in_user_list_string(solvedUser, user_name)
                     if not verify_task_finished_or_notify_users_task_to_solve(task):
                         task['taskSolved'] = False
+                    else:
+                        new_segment = create_pinpoint_segment(None, row[0][2])
+                        create_campaign(new_segment, row[0][2], task['taskTitle'], task['taskTitle'] + " has resolved")
+
                     print("real task status:" + str(task['taskSolved']))
 
                 update_clause = generate_sql_clause("UPDATE", table_name, task)
