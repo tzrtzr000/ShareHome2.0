@@ -280,6 +280,7 @@ def create_pinpoint_segment(user_name, group_name):
 
 def task_handler(event, context):
     init_db_connection()
+    init_boto3_client()
 
     table_name = 'Tasks'
     sample_task = {
@@ -336,13 +337,30 @@ def task_handler(event, context):
         if operation == 'add':
             if 'taskID' in task:
                 # we want to update
+
+                if task['taskSolved'] is True:
+                    if 'userName' not in query_string_parameters:
+                        return generate_error_response(400, 'Missing \'userName\' key in query_string')
+                    user_name = query_string_parameters['userName']
+
+                    sql = "SELECT solvedUser, taskTitle FROM %s WHERE taskID = %d" % (
+                        table_name, task['taskID'])
+                    row = execute_sql(sql)
+                    solvedUser = row[0][0]
+                    task['taskTitle'] = row[0][1]
+                    task['solvedUser'] = add_user_name_non_duplicate_in_user_list_string(solvedUser, user_name)
+                    if not verify_task_finished_or_notify_users_task_to_solve(task):
+                        task['taskSolved'] = False
+                    print("real task status:" + str(task['taskSolved']))
+
                 update_clause = generate_sql_clause("UPDATE", table_name, task)
                 sql = '%s WHERE taskID = %d' % \
                       (update_clause, task['taskID'])
-                data = generate_result_response("Add task '%s' success" % task['taskTitle'])
+                data = generate_result_response("Task '%s' updated" % task['taskTitle'])
+
             else:
                 sql = generate_sql_clause("INSERT", table_name, task)
-                data = generate_result_response("Task '%s' updated" % task['taskTitle'])
+                data = generate_result_response("Task '%s' added" % task['taskTitle'])
 
             execute_sql(sql)
         else:
@@ -352,6 +370,41 @@ def task_handler(event, context):
 
     else:
         return generate_error_response(400, "Unsupported httpMethod: " + event['httpMethod'])
+
+
+def add_user_name_non_duplicate_in_user_list_string(user_list_string, user_name):
+    if user_list_string is None or user_list_string is "":
+        user_list_string = []
+    else:
+        user_list_string = user_list_string.split(",")
+    if user_name not in user_list_string:
+        user_list_string.append(user_name)
+    return ','.join(user_list_string)
+
+
+def verify_task_finished_or_notify_users_task_to_solve(task):
+    solved_user_string = task['solvedUser']
+
+    if solved_user_string is None or solved_user_string is "":
+        logger.error("Program ERROR! user_list_string should never be null, at least it should have the user")
+        return generate_error_response(400, generate_result_response("Check log right now."))
+    else:
+        solved_user_list = solved_user_string.split(",")
+
+    response = boto_cognito_client.list_users_in_group(
+        UserPoolId=aws_config.UserPoolId,
+        GroupName=task['groupName'],
+        Limit=60
+    )
+    all_users_in_group = [user['Username'] for user in response['Users']]
+
+    pushed_user_count = 0
+    for user in all_users_in_group:
+        if user not in solved_user_list:
+            pushed_user_count = pushed_user_count + 1
+            new_segment = create_pinpoint_segment(user, None)
+            create_campaign(new_segment, user, task['taskTitle'], "Please verify task '%s' completion" % task['taskTitle'])
+    return pushed_user_count == 0
 
 
 def execute_sql(sql):
@@ -457,10 +510,12 @@ def profile_handler(event, context):
         select_cause = generate_sql_clause("SELECT", table_name, sample_profile)
         sql = '%s WHERE userName =\'%s\'' % (select_cause, user_name)
         rows = execute_sql(sql)
-
-        result = {
-            "result": rows[0][0]
-        }
+        if len(rows) != 0:
+            result = {
+                "result": rows[0][0]
+            }
+        else:
+            return generate_error_response(400, generate_result_response("User '%s' has no profile picture" % user_name))
 
         data = json.dumps(result)
         return generate_success_response(data)
@@ -523,7 +578,7 @@ def generate_sql_clause(sql_op, table_name, data):
 
 
 def handler(event, context):
-    # print(json.dumps(event, sort_keys=True))
+    print(json.dumps(event, sort_keys=True))
     library.init()
     resource_path = event['path']
 
