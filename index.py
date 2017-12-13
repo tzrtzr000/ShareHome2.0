@@ -454,7 +454,6 @@ def profile_handler(event, context):
         if 'userName' not in query_string_parameters:
             return generate_error_response(400, 'Missing \'userName\' key in request body')
         user_name = query_string_parameters['userName']
-
         select_cause = generate_sql_clause("SELECT", table_name, sample_profile)
         sql = '%s WHERE userName =\'%s\'' % (select_cause, user_name)
         rows = execute_sql(sql)
@@ -473,8 +472,17 @@ def profile_handler(event, context):
 
         profile = json.loads(event['body'])
 
-        sql_clasue = "INSERT INTO %s (userName, result) VALUES (\'%s\', \'%s\') " % (table_name, user_name, profile['result'])
-        execute_sql(sql_clasue)
+        sql_check = generate_sql_clause("SELECT", table_name, profile)
+        sql_check = sql_check + " WHERE userName = '%s'" % user_name
+        rows = execute_sql(sql_check)
+        if len(rows) != 0:
+            # we want to update
+            update_clause = generate_sql_clause("UPDATE", table_name, profile)
+            sql = '%s WHERE userName = "%s"' % \
+                        (update_clause, user_name)
+        else:
+            sql = "INSERT INTO %s (userName, result) VALUES (\'%s\', \'%s\') " % (table_name, user_name, profile['result'])
+        execute_sql(sql)
         return generate_success_response(generate_result_response("success?"))
 
 
