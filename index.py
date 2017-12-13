@@ -487,6 +487,12 @@ def post_handler(event, context):
             execute_sql(sql)
 
             data = generate_result_response("Add post '%s' success" % post['postTitle'])
+        elif operation == 'remove':
+            if 'postID' not in post:
+                return generate_error_response(400, "Remove must have postID ")
+            sql = "DELETE FROM %s WHERE postID = %d" % (table_name, post['postID'])
+            execute_sql(sql)
+            data = generate_result_response("Remove post success")
 
         else:
             return generate_error_response(400, "Unsupported operation: " + operation)
